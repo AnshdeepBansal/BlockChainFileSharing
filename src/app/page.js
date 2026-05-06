@@ -10,7 +10,7 @@ export default function Home() {
   const { myFiles, loading, error: contractError, register, grant, revoke, check } = useFileAccess(address);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12 px-4">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
@@ -77,7 +77,7 @@ export default function Home() {
         {address ? (
           <div className="space-y-8">
             {/* Upload Form */}
-            <UploadForm onRegister={register} />
+            <UploadForm onRegister={register} walletAddress={address} />
 
             {/* Access Control Panel */}
             <AccessControl

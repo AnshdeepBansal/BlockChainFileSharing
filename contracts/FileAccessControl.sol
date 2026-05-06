@@ -8,6 +8,9 @@ pragma solidity ^0.8.20;
  *         to any Ethereum address.
  */
 contract FileAccessControl {
+    uint256 public constant MAX_CID_LENGTH = 128;
+    uint256 public constant MAX_FILENAME_LENGTH = 256;
+
     // ───────── Data Structures ─────────
 
     struct FileInfo {
@@ -69,6 +72,9 @@ contract FileAccessControl {
         returns (uint256 fileId)
     {
         require(bytes(_cid).length > 0, "CID cannot be empty");
+        require(bytes(_cid).length <= MAX_CID_LENGTH, "CID too long");
+        require(bytes(_fileName).length > 0, "File name cannot be empty");
+        require(bytes(_fileName).length <= MAX_FILENAME_LENGTH, "File name too long");
 
         fileId = fileCount;
         fileCount++;
@@ -134,6 +140,22 @@ contract FileAccessControl {
         }
     }
 
+    /**
+     * @notice Revoke access from multiple addresses in one transaction.
+     */
+    function revokeAccessBatch(uint256 _fileId, address[] calldata _viewers)
+        external
+        fileExists(_fileId)
+        onlyFileOwner(_fileId)
+    {
+        for (uint256 i = 0; i < _viewers.length; i++) {
+            if (_viewers[i] != msg.sender && accessList[_fileId][_viewers[i]]) {
+                accessList[_fileId][_viewers[i]] = false;
+                emit AccessRevoked(_fileId, _viewers[i], msg.sender);
+            }
+        }
+    }
+
     // ───────── View Functions ─────────
 
     /**
@@ -168,6 +190,28 @@ contract FileAccessControl {
      */
     function getOwnerFiles(address _owner) external view returns (uint256[] memory) {
         return ownerFiles[_owner];
+    }
+
+    /**
+     * @notice Return a page of file IDs uploaded by an owner.
+     */
+    function getOwnerFilesPaginated(address _owner, uint256 _offset, uint256 _limit)
+        external
+        view
+        returns (uint256[] memory page, uint256 total)
+    {
+        total = ownerFiles[_owner].length;
+        if (_offset >= total) {
+            return (new uint256[](0), total);
+        }
+
+        uint256 remaining = total - _offset;
+        uint256 count = _limit < remaining ? _limit : remaining;
+        page = new uint256[](count);
+
+        for (uint256 i = 0; i < count; i++) {
+            page[i] = ownerFiles[_owner][_offset + i];
+        }
     }
 
     /**

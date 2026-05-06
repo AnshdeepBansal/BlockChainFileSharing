@@ -1,19 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { uploadToIPFS, getIPFSUrl } from '@/lib/ipfs';
+import { bindFileRegistration, uploadToIPFS, getIPFSUrl } from '@/lib/ipfs';
 
 interface UploadFormProps {
   /** Called after the file is uploaded to IPFS and registered on-chain */
   onRegister: (cid: string, fileName: string) => Promise<number>;
+  walletAddress: string;
 }
 
-export default function UploadForm({ onRegister }: UploadFormProps) {
+export default function UploadForm({ onRegister, walletAddress }: UploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [cid, setCid] = useState<string | null>(null);
   const [fileId, setFileId] = useState<number | null>(null);
+  const [compressed, setCompressed] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -21,6 +23,7 @@ export default function UploadForm({ onRegister }: UploadFormProps) {
       setFile(e.target.files[0]);
       setCid(null);
       setFileId(null);
+      setCompressed(null);
       setError(null);
       setStatus(null);
     }
@@ -38,17 +41,23 @@ export default function UploadForm({ onRegister }: UploadFormProps) {
     setError(null);
     setCid(null);
     setFileId(null);
+    setCompressed(null);
 
     try {
-      // Step 1: Upload to IPFS
-      setStatus('Uploading to IPFS...');
-      const ipfsCid = await uploadToIPFS(file);
-      setCid(ipfsCid);
+      // Step 1: Upload through secure backend pipeline
+      setStatus('Uploading through secure pipeline (compression/encryption/IPFS)...');
+      const upload = await uploadToIPFS(file, walletAddress);
+      setCid(upload.cid);
+      setCompressed(upload.isCompressed);
 
       // Step 2: Register on-chain
       setStatus('Registering on-chain (confirm in MetaMask)...');
-      const id = await onRegister(ipfsCid, file.name);
+      const id = await onRegister(upload.cid, file.name);
       setFileId(id);
+
+      // Step 3: Bind secure record to on-chain fileId
+      setStatus('Finalizing secure mapping...');
+      await bindFileRegistration(upload.cid, id, walletAddress);
       setStatus(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to upload file';
@@ -128,6 +137,14 @@ export default function UploadForm({ onRegister }: UploadFormProps) {
               <p className="text-xs text-gray-600 mb-1">IPFS CID:</p>
               <p className="text-sm font-mono text-gray-800 break-all">{cid}</p>
             </div>
+            {compressed !== null && (
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Compression:</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  {compressed ? 'Applied before encryption' : 'Skipped (file type/size)'}
+                </p>
+              </div>
+            )}
             <a
               href={getIPFSUrl(cid)}
               target="_blank"

@@ -22,7 +22,7 @@ export default function AccessControl({ files, onGrant, onRevoke, onCheck, loadi
 
   const validateAddress = (addr: string): boolean => {
     try {
-      return ethers.isAddress(addr);
+      return ethers.isAddress(addr) && addr.toLowerCase() !== ethers.ZeroAddress.toLowerCase();
     } catch {
       return false;
     }

@@ -2,7 +2,18 @@ const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
+const ALLOWED_CHAIN_IDS = [31337, 11155111];
+
 async function main() {
+  const network = await hre.ethers.provider.getNetwork();
+  const chainId = Number(network.chainId);
+  if (!ALLOWED_CHAIN_IDS.includes(chainId)) {
+    throw new Error(
+      `Unsafe deployment target chainId=${chainId}. Allowed: ${ALLOWED_CHAIN_IDS.join(", ")}`
+    );
+  }
+
+  console.log(`Deploying on network=${network.name} chainId=${chainId}`);
   console.log("Deploying FileAccessControl...");
 
   const FileAccessControl = await hre.ethers.getContractFactory("FileAccessControl");
@@ -31,6 +42,20 @@ async function main() {
   envContent += `NEXT_PUBLIC_CONTRACT_ADDRESS=${address}\n`;
   fs.writeFileSync(envPath, envContent);
   console.log(`Contract address written to .env.local`);
+
+  const deploymentLogPath = path.join(__dirname, "..", "cache", "deployments.json");
+  let logs = [];
+  if (fs.existsSync(deploymentLogPath)) {
+    logs = JSON.parse(fs.readFileSync(deploymentLogPath, "utf8"));
+  }
+  logs.push({
+    contract: "FileAccessControl",
+    address,
+    chainId,
+    network: network.name,
+    deployedAt: new Date().toISOString(),
+  });
+  fs.writeFileSync(deploymentLogPath, JSON.stringify(logs, null, 2));
 }
 
 main()

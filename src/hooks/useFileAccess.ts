@@ -24,6 +24,22 @@ export function useFileAccess(walletAddress: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const logEvent = useCallback(
+    async (event: string, context: Record<string, unknown>) => {
+      if (!walletAddress) return;
+      try {
+        await fetch('/api/anomaly/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event, wallet: walletAddress, context }),
+        });
+      } catch {
+        // Telemetry is best-effort and should not block primary flow.
+      }
+    },
+    [walletAddress]
+  );
+
   // ── Load files owned by the connected wallet ──
 
   const loadMyFiles = useCallback(async () => {
@@ -84,6 +100,8 @@ export function useFileAccess(walletAddress: string | null) {
     setError(null);
     try {
       await grantAccess(fileId, viewer);
+      await logEvent('grant', { fileId, viewer });
+      await loadMyFiles();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to grant access';
       setError(msg);
@@ -97,6 +115,8 @@ export function useFileAccess(walletAddress: string | null) {
     setError(null);
     try {
       await revokeAccess(fileId, viewer);
+      await logEvent('revoke', { fileId, viewer });
+      await loadMyFiles();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to revoke access';
       setError(msg);
@@ -109,7 +129,9 @@ export function useFileAccess(walletAddress: string | null) {
   const check = async (fileId: number, viewer: string): Promise<boolean> => {
     setError(null);
     try {
-      return await checkAccess(fileId, viewer);
+      const hasAccess = await checkAccess(fileId, viewer);
+      await logEvent('check_access', { fileId, viewer, hasAccess });
+      return hasAccess;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Access check failed';
       setError(msg);

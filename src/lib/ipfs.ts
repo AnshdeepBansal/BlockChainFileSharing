@@ -1,63 +1,52 @@
 /**
- * IPFS upload using Pinata pinning service
+ * IPFS is now handled through backend API routes so secrets and keys remain server-side.
  */
 
-const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY;
-const PINATA_API_SECRET = process.env.NEXT_PUBLIC_PINATA_API_SECRET;
-const PINATA_API_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
+export type UploadResult = {
+  cid: string;
+  isCompressed: boolean;
+};
 
 /**
- * Upload a file to IPFS using Pinata
+ * Upload a file using secure backend pipeline (compression + encryption + IPFS pinning)
  * @param file - The file to upload
+ * @param walletAddress - Connected wallet address used for ownership telemetry and binding
  * @returns The IPFS CID (Content Identifier)
  */
-export async function uploadToIPFS(file: File): Promise<string> {
-  if (!PINATA_API_KEY || !PINATA_API_SECRET) {
-    throw new Error('Pinata API credentials are not configured. Please add NEXT_PUBLIC_PINATA_API_KEY and NEXT_PUBLIC_PINATA_API_SECRET to .env.local');
+export async function uploadToIPFS(file: File, walletAddress: string): Promise<UploadResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('walletAddress', walletAddress);
+
+  const response = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = (await response.json()) as { cid?: string; isCompressed?: boolean; error?: string };
+  if (!response.ok || !data.cid) {
+    throw new Error(data.error || 'Failed to upload to secure IPFS pipeline');
   }
 
-  try {
-    // Create form data
-    const formData = new FormData();
-    formData.append('file', file);
+  return {
+    cid: data.cid,
+    isCompressed: Boolean(data.isCompressed),
+  };
+}
 
-    // Optional: Add metadata
-    const metadata = JSON.stringify({
-      name: file.name,
-      keyvalues: {
-        uploadedAt: new Date().toISOString(),
-      },
-    });
-    formData.append('pinataMetadata', metadata);
+/**
+ * Bind on-chain fileId to secure upload record after successful registerFile tx.
+ */
+export async function bindFileRegistration(cid: string, fileId: number, walletAddress: string): Promise<void> {
+  const response = await fetch('/api/upload/bind', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cid, fileId, walletAddress }),
+  });
 
-    // Optional: Add pinning options
-    const options = JSON.stringify({
-      cidVersion: 1,
-    });
-    formData.append('pinataOptions', options);
-
-    // Upload to Pinata
-    const response = await fetch(PINATA_API_URL, {
-      method: 'POST',
-      headers: {
-        'pinata_api_key': PINATA_API_KEY,
-        'pinata_secret_api_key': PINATA_API_SECRET,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Upload failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Pinata returns IpfsHash as the CID
-    return data.IpfsHash;
-  } catch (error) {
-    console.error('Error uploading to Pinata:', error);
-    throw error instanceof Error ? error : new Error('Failed to upload to IPFS');
+  const data = (await response.json()) as { ok?: boolean; error?: string };
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || 'Failed to bind on-chain registration to secure record');
   }
 }
 

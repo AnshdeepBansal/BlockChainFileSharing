@@ -1,5 +1,17 @@
 import { ethers } from 'ethers';
 
+type EIP1193RequestArgs = {
+  method: string;
+  params?: unknown[] | Record<string, unknown>;
+};
+
+interface EthereumProvider {
+  request: (args: EIP1193RequestArgs) => Promise<unknown>;
+  on: (eventName: string, listener: (...args: unknown[]) => void) => void;
+  off?: (eventName: string, listener: (...args: unknown[]) => void) => void;
+  removeListener?: (eventName: string, listener: (...args: unknown[]) => void) => void;
+}
+
 /**
  * Check if MetaMask is installed
  */
@@ -63,9 +75,26 @@ export async function getCurrentAddress(): Promise<string | null> {
   }
 }
 
+/**
+ * Sign an arbitrary message using the connected wallet.
+ */
+export async function signWalletMessage(message: string): Promise<string> {
+  if (!isMetaMaskInstalled()) {
+    throw new Error('MetaMask is not installed');
+  }
+
+  const provider = getProvider();
+  if (!provider) {
+    throw new Error('Failed to get provider');
+  }
+
+  const signer = await provider.getSigner();
+  return await signer.signMessage(message);
+}
+
 // Extend the Window interface to include ethereum
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: EthereumProvider;
   }
 }

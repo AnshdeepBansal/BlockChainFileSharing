@@ -39,3 +39,22 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Backend runtime data (session, secure files, telemetry)
+/cache/secure-files-db.json
+/cache/deployments.json
+
+# Hardhat
+artifacts/
+contracts/artifacts/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment-specific configs
+.env.local
+.env.*.local
